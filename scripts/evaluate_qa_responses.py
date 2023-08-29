@@ -11,7 +11,7 @@ from copy import deepcopy
 from tqdm import tqdm
 from xopen import xopen
 
-from lost_in_the_middle.metrics import best_subspan_em
+from src.lost_in_the_middle.metrics import best_subspan_em
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ def main(
         all_example_metrics.append(get_metrics_for_example(example))
 
     # Average metrics across examples
-    for (_, metric_name) in METRICS:
+    for _, metric_name in METRICS:
         average_metric_value = statistics.mean(
             example_metrics[metric_name] for (example_metrics, _) in all_example_metrics
         )
@@ -45,7 +45,7 @@ def main(
 
     if output_path:
         with xopen(output_path, "w") as f:
-            for (example_metrics, example) in all_example_metrics:
+            for example_metrics, example in all_example_metrics:
                 example_with_metrics = deepcopy(example)
                 for metric_name, metric_value in example_metrics.items():
                     example_with_metrics[f"metric_{metric_name}"] = metric_value
@@ -62,7 +62,7 @@ def get_metrics_for_example(example):
     model_answer = model_answer.split("\n")[0].strip()
 
     example_metrics = {}
-    for (metric, metric_name) in METRICS:
+    for metric, metric_name in METRICS:
         example_metrics[metric_name] = metric(prediction=model_answer, ground_truths=gold_answers)
     return (example_metrics, example)
 

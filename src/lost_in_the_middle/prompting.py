@@ -58,7 +58,22 @@ def get_qa_prompt(
     formatted_documents = []
     for document_index, document in enumerate(documents):
         formatted_documents.append(f"Document [{document_index+1}](Title: {document.title}) {document.text}")
-    return prompt_template.format(question=question, search_results="\n".join(formatted_documents))
+
+    system_message = "\n\n".join(prompt_template.split("\n\n")[:2])
+    system_message = system_message.format(search_results="\n".join(formatted_documents))
+
+    user_message = prompt_template.split("\n\n")[-1]
+    user_message = user_message.split("\n")[0]
+    user_message = user_message.format(question=question)
+    if user_message[-1] != "?":
+        user_message += "?"
+
+    prompt = {
+        "system_message": system_message,
+        "user_message": user_message,
+    }
+
+    return prompt
 
 
 def get_closedbook_qa_prompt(question: str):
@@ -66,6 +81,8 @@ def get_closedbook_qa_prompt(question: str):
         raise ValueError(f"Provided `question` must be truthy, got: {question}")
     with open(PROMPTS_ROOT / "closedbook_qa.prompt") as f:
         prompt_template = f.read().rstrip("\n")
+
+    # ADD CODE HERE.
 
     return prompt_template.format(question=question)
 
