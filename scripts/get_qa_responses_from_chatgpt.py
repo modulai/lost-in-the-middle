@@ -124,7 +124,9 @@ def main(
             f.write(json.dumps(output_example) + "\n")
 
 
-def get_openai_chat_completion(model, temperature, top_p, max_tokens, system_message, user_message):
+def get_openai_chat_completion(
+    model: str, temperature: float, top_p: float, max_tokens: int, system_message: str, user_message: str
+) -> str:
     try:
         response = openai.ChatCompletion.create(
             model=model,
