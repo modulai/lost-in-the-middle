@@ -32,22 +32,20 @@ random.seed(0)
 N_INPUTS = 100
 
 
-def main(
-    input_path,
-    model_name,
-    temperature,
-    top_p,
-    batch_size,
-    closedbook,
-    prompt_mention_random_ordering,
-    use_random_ordering,
-    query_aware_contextualization,
-    num_gpus,
-    max_memory_per_gpu,
-    longchat_flash_attn,
-    longchat_ratio,
-    max_new_tokens,
-    output_path,
+def get_qa_responses(
+    input_path="qa_data/20_total_documents/nq-open-20_total_documents_gold_at_19.jsonl.gz",
+    model_name="gpt-3.5-turbo-0613",
+    temperature=0.0,
+    top_p=1.0,
+    batch_size=8,
+    closedbook=False,
+    prompt_mention_random_ordering=False,
+    use_random_ordering=False,
+    query_aware_contextualization=False,
+    longchat_flash_attn=False,
+    longchat_ratio=8,
+    max_new_tokens=100,
+    output_path="qa_predictions/nq-open-20_total_documents_gold_at_19-gpt-3.5-turbo-0613-predictions.jsonl.gz",
 ):
     # Create directory for output path if it doesn't exist.
     pathlib.Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -145,82 +143,71 @@ def get_openai_chat_completion(
     return response["choices"][0]["message"]["content"]
 
 
+GOLD_INDEX = 19
+
+
+def evaluate_qa_responses(
+    input_path,
+    output_path,
+):
+    def get_metrics_for_example(example):
+        gold_answers = example["answers"]
+        model_answer = example["model_answer"]
+
+        # NOTE: we take everything up to the first newline, since otherwise models could hack
+        # the metric by simply copying te input context (as the gold answer is guaranteed
+        # to occur in the input context).
+        model_answer = model_answer.split("\n")[0].strip()
+
+        example_metrics = {}
+        for metric, metric_name in METRICS:
+            example_metrics[metric_name] = metric(prediction=model_answer, ground_truths=gold_answers)
+        return (example_metrics, example)
+
+    all_examples = []
+    with xopen(input_path) as fin:
+        for line in tqdm(fin):
+            input_example = json.loads(line)
+            all_examples.append(input_example)
+
+    # Compute normal metrics in parallel, if applicable
+    logger.info("Computing metrics")
+    all_example_metrics = []
+    for example in tqdm(all_examples):
+        all_example_metrics.append(get_metrics_for_example(example))
+
+    # Average metrics across examples
+    metric_name = "best_subspan_em"
+    average_metric_value = statistics.mean(example_metrics[metric_name] for (example_metrics, _) in all_example_metrics)
+    logger.info(f"{metric_name}: {average_metric_value}")
+
+    if output_path:
+        with xopen(output_path, "w") as f:
+            for example_metrics, example in all_example_metrics:
+                example_with_metrics = deepcopy(example)
+                for metric_name, metric_value in example_metrics.items():
+                    example_with_metrics[f"metric_{metric_name}"] = metric_value
+                f.write(json.dumps(example_with_metrics) + "\n")
+
+    return average_metric_value
+
+
 if __name__ == "__main__":
     logging.basicConfig(format="%(asctime)s - %(module)s - %(levelname)s - %(message)s", level=logging.INFO)
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--input-path",
-        help="Path to data with questions and documents to use.",
-        default="qa_data/20_total_documents/nq-open-20_total_documents_gold_at_19.jsonl.gz",
-    )
-    parser.add_argument("--model", help="Model to use in generating responses", default="gpt-3.5-turbo-0613")
-    parser.add_argument("--temperature", help="Temperature to use in generation", type=float, default=0.0)
-    parser.add_argument("--top-p", help="Top-p to use in generation", type=float, default=1.0)
-    parser.add_argument("--batch-size", help="Batch size use in generation", type=int, default=8)
-    parser.add_argument(
-        "--output-path",
-        help="Path to write output file of generated responses",
-        default="qa_predictions/nq-open-20_total_documents_gold_at_19-gpt-3.5-turbo-0613-predictions.jsonl.gz",
-    )
-    parser.add_argument("--num-gpus", help="Number of GPUs to use", type=int)
-    parser.add_argument(
-        "--closedbook", action="store_true", help="Run the model in closed-book mode (i.e., don't use documents)."
-    )
-    parser.add_argument(
-        "--prompt-mention-random-ordering",
-        action="store_true",
-        help="Mention that search results are ordered randomly in the prompt",
-    )
-    parser.add_argument(
-        "--use-random-ordering",
-        action="store_true",
-        help="Randomize the ordering of the distractors, rather than sorting by relevance.",
-    )
-    parser.add_argument(
-        "--query-aware-contextualization",
-        action="store_true",
-        help="Place the question both before and after the documents.",
-    )
-    parser.add_argument(
-        "--longchat-flash-attn",
-        action="store_true",
-        help="Only apply to longchat models. Whether to enable flash attention to save memory, but slower.",
-    )
-    parser.add_argument(
-        "--longchat-ratio",
-        type=int,
-        default=8,
-        help="Only apply to longchat models. Use ratio=8 for 16K context length model. Only ratio=8 is supported now.",
-    )
-    parser.add_argument(
-        "--max-memory-per-gpu",
-        help="Maximum memory to use per GPU (in GiB) for multi-device parallelism, e.g., 80",
-        type=int,
-    )
-    parser.add_argument(
-        "--max-new-tokens",
-        help="Maximum number of new tokens to generate",
-        type=int,
-        default=100,
-    )
-    args = parser.parse_args()
 
-    logger.info("running %s", " ".join(sys.argv))
-    main(
-        args.input_path,
-        args.model,
-        args.temperature,
-        args.top_p,
-        args.batch_size,
-        args.closedbook,
-        args.prompt_mention_random_ordering,
-        args.use_random_ordering,
-        args.query_aware_contextualization,
-        args.num_gpus,
-        args.max_memory_per_gpu,
-        args.longchat_flash_attn,
-        args.longchat_ratio,
-        args.max_new_tokens,
-        args.output_path,
-    )
-    logger.info("finished running %s", sys.argv[0])
+    results = {}
+    for gold_index in [0, 4, 9, 14, 19]:
+        predictions_path = (
+            f"qa_predictions/nq-open-20_total_documents_gold_at_{gold_index}-gpt-3.5-turbo-0613-predictions.jsonl.gz"
+        )
+        get_qa_responses(
+            input_path=f"qa_data/20_total_documents/nq-open-20_total_documents_gold_at_{gold_index}.jsonl.gz",
+            output_path=predictions_path,
+        )
+        metric_value = evaluate_qa_responses(
+            input_path=predictions_path,
+            output_path=f"qa_predictions/q-open-20_total_documents_gold_at_{gold_index}-gpt-3.5-turbo-0613-predictions-scored.jsonl.gz",
+        )
+        results[gold_index] = metric_value
+
+    print(results)
