@@ -1,27 +1,20 @@
-#!/usr/bin/env python3
-"""Given a data file with questions and retrieval results to use, run longchat to get responses.
-
-Currently, this script only supports `longchat-13b-16k`.
-
-The retrieval results are used in the exact order that they're given.
-"""
-import argparse
 import dataclasses
 import json
 import logging
-import math
 import os
 import pathlib
 import random
 import statistics
-import sys
 from copy import deepcopy
+import time
 
+import matplotlib.pyplot as plt
 import openai
 from dotenv import find_dotenv, load_dotenv
 from tqdm import tqdm
 from xopen import xopen
 
+from src.lost_in_the_middle.metrics import best_subspan_em
 from src.lost_in_the_middle.prompting import Document, get_closedbook_qa_prompt, get_qa_prompt
 
 from src.lost_in_the_middle.metrics import best_subspan_em
@@ -29,10 +22,17 @@ from src.lost_in_the_middle.metrics import best_subspan_em
 load_dotenv(find_dotenv())
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+plt.style.use("ggplot")
+
 logger = logging.getLogger(__name__)
 random.seed(0)
 
 N_INPUTS = 100
+
+
+METRICS = [
+    (best_subspan_em, "best_subspan_em"),
+]
 
 
 def get_qa_responses(
@@ -40,11 +40,8 @@ def get_qa_responses(
     model_name="gpt-3.5-turbo-0613",
     temperature=0.0,
     top_p=1.0,
-    batch_size=8,
     closedbook=False,
     use_random_ordering=False,
-    longchat_flash_attn=False,
-    longchat_ratio=8,
     max_new_tokens=100,
     output_path="qa_predictions/nq-open-20_total_documents_gold_at_19-gpt-3.5-turbo-0613-predictions.jsonl.gz",
     prompt_function=get_qa_prompt,
@@ -58,7 +55,6 @@ def get_qa_responses(
     examples = []
     prompts = []
     all_model_documents = []
-    did_format_warn = False
 
     # Fetch all of the prompts
     with xopen(input_path) as fin:
@@ -127,8 +123,9 @@ def get_qa_responses(
 def get_openai_chat_completion(
     model: str, temperature: float, top_p: float, max_tokens: int, system_message: str, user_message: str
 ) -> str:
-    try:
-        response = openai.ChatCompletion.create(
+    
+    def create_chat_completion():
+        return openai.ChatCompletion.create(
             model=model,
             messages=[
                 {"role": "system", "content": system_message},
@@ -138,16 +135,16 @@ def get_openai_chat_completion(
             top_p=top_p,
             max_tokens=max_tokens,
         )
+
+    try:
+        response = create_chat_completion()
     except Exception as e:
-        print(f"Error: {e}\nReturning empty string.")
-        return ""
+        print(f"Error: {e}")
+        print("Let's sleep for 40s")
+        time.sleep(40)
+        response = create_chat_completion()
 
     return response["choices"][0]["message"]["content"]
-
-
-GOLD_INDEX = 19
-
-metric_name = "best_subspan_em"
 
 
 def evaluate_qa_responses(
@@ -180,8 +177,12 @@ def evaluate_qa_responses(
         all_example_metrics.append(get_metrics_for_example(example))
 
     # Average metrics across examples
-    average_metric_value = statistics.mean(example_metrics[metric_name] for (example_metrics, _) in all_example_metrics)
-    logger.info(f"{metric_name}: {average_metric_value}")
+
+    for _, metric_name in METRICS:
+        average_metric_value = statistics.mean(
+            example_metrics[metric_name] for (example_metrics, _) in all_example_metrics
+        )
+        logger.info(f"{metric_name}: {average_metric_value}")
 
     if output_path:
         with xopen(output_path, "w") as f:
@@ -219,3 +220,11 @@ if __name__ == "__main__":
 
     results = run_qa_experiment(get_qa_prompt)
     print(results)
+
+    fig, ax = plt.subplots()
+    ax.plot(results.keys(), results.values(), marker="o")
+    ax.set_xlabel("Position of Document with the Answer")
+    ax.set_ylabel("Accuracy")
+    ax.set_title("20 Total Retrieved Documents")
+    fig.savefig("results.png")
+    plt.close()
