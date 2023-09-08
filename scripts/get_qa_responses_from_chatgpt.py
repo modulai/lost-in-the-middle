@@ -17,6 +17,8 @@ from xopen import xopen
 from src.lost_in_the_middle.metrics import best_subspan_em
 from src.lost_in_the_middle.prompting import Document, get_closedbook_qa_prompt, get_qa_prompt
 
+from src.lost_in_the_middle.prompts.prompt_functions import interleaved_prompt
+
 from src.lost_in_the_middle.metrics import best_subspan_em
 
 load_dotenv(find_dotenv())
@@ -123,7 +125,6 @@ def get_qa_responses(
 def get_openai_chat_completion(
     model: str, temperature: float, top_p: float, max_tokens: int, system_message: str, user_message: str
 ) -> str:
-    
     def create_chat_completion():
         return openai.ChatCompletion.create(
             model=model,
@@ -218,7 +219,8 @@ def run_qa_experiment(prompt_function):
 if __name__ == "__main__":
     logging.basicConfig(format="%(asctime)s - %(module)s - %(levelname)s - %(message)s", level=logging.INFO)
 
-    results = run_qa_experiment(get_qa_prompt)
+    # results = run_qa_experiment(get_qa_prompt)
+    results = run_qa_experiment(interleaved_prompt)
     print(results)
 
     fig, ax = plt.subplots()
