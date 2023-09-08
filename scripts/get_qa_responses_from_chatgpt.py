@@ -13,6 +13,7 @@ import math
 import os
 import pathlib
 import random
+import statistics
 import sys
 from copy import deepcopy
 
@@ -22,6 +23,8 @@ from tqdm import tqdm
 from xopen import xopen
 
 from src.lost_in_the_middle.prompting import Document, get_closedbook_qa_prompt, get_qa_prompt
+
+from src.lost_in_the_middle.metrics import best_subspan_em
 
 load_dotenv(find_dotenv())
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -39,14 +42,16 @@ def get_qa_responses(
     top_p=1.0,
     batch_size=8,
     closedbook=False,
-    prompt_mention_random_ordering=False,
     use_random_ordering=False,
-    query_aware_contextualization=False,
     longchat_flash_attn=False,
     longchat_ratio=8,
     max_new_tokens=100,
     output_path="qa_predictions/nq-open-20_total_documents_gold_at_19-gpt-3.5-turbo-0613-predictions.jsonl.gz",
+    prompt_function=get_qa_prompt,
 ):
+    """
+    prompt_function: Callable(question, documents) -> {"system_Message": system_message, "user_message": user_message}
+    """
     # Create directory for output path if it doesn't exist.
     pathlib.Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
@@ -83,11 +88,9 @@ def get_qa_responses(
             if closedbook:
                 prompt = get_closedbook_qa_prompt(question)
             else:
-                prompt = get_qa_prompt(
+                prompt = prompt_function(
                     question,
                     documents,
-                    mention_random_ordering=prompt_mention_random_ordering,
-                    query_aware_contextualization=query_aware_contextualization,
                 )
 
             prompts.append(prompt)
@@ -117,7 +120,6 @@ def get_qa_responses(
             output_example["model"] = model_name
             output_example["model_temperature"] = temperature
             output_example["model_top_p"] = top_p
-            output_example["model_prompt_mention_random_ordering"] = prompt_mention_random_ordering
             output_example["model_use_random_ordering"] = use_random_ordering
             f.write(json.dumps(output_example) + "\n")
 
@@ -145,6 +147,8 @@ def get_openai_chat_completion(
 
 GOLD_INDEX = 19
 
+metric_name = "best_subspan_em"
+
 
 def evaluate_qa_responses(
     input_path,
@@ -160,8 +164,7 @@ def evaluate_qa_responses(
         model_answer = model_answer.split("\n")[0].strip()
 
         example_metrics = {}
-        for metric, metric_name in METRICS:
-            example_metrics[metric_name] = metric(prediction=model_answer, ground_truths=gold_answers)
+        example_metrics[metric_name] = best_subspan_em(prediction=model_answer, ground_truths=gold_answers)
         return (example_metrics, example)
 
     all_examples = []
@@ -177,7 +180,6 @@ def evaluate_qa_responses(
         all_example_metrics.append(get_metrics_for_example(example))
 
     # Average metrics across examples
-    metric_name = "best_subspan_em"
     average_metric_value = statistics.mean(example_metrics[metric_name] for (example_metrics, _) in all_example_metrics)
     logger.info(f"{metric_name}: {average_metric_value}")
 
@@ -192,22 +194,28 @@ def evaluate_qa_responses(
     return average_metric_value
 
 
-if __name__ == "__main__":
-    logging.basicConfig(format="%(asctime)s - %(module)s - %(levelname)s - %(message)s", level=logging.INFO)
-
+def run_qa_experiment(prompt_function):
     results = {}
+    function_name = prompt_function.__name__
     for gold_index in [0, 4, 9, 14, 19]:
-        predictions_path = (
-            f"qa_predictions/nq-open-20_total_documents_gold_at_{gold_index}-gpt-3.5-turbo-0613-predictions.jsonl.gz"
-        )
+        predictions_path = f"qa_predictions/{function_name}/nq-open-20_total_documents_gold_at_{gold_index}-gpt-3.5-turbo-0613-predictions.jsonl.gz"
         get_qa_responses(
             input_path=f"qa_data/20_total_documents/nq-open-20_total_documents_gold_at_{gold_index}.jsonl.gz",
             output_path=predictions_path,
+            prompt_function=prompt_function,
         )
         metric_value = evaluate_qa_responses(
             input_path=predictions_path,
-            output_path=f"qa_predictions/q-open-20_total_documents_gold_at_{gold_index}-gpt-3.5-turbo-0613-predictions-scored.jsonl.gz",
+            output_path=f"qa_predictions/{function_name}/q-open-20_total_documents_gold_at_{gold_index}-gpt-3.5-turbo-0613-predictions-scored.jsonl.gz",
         )
         results[gold_index] = metric_value
+    with open(f"qa_predictions/{function_name}/results.json", "w") as f:
+        json.dump(results, f)
+    return results
 
+
+if __name__ == "__main__":
+    logging.basicConfig(format="%(asctime)s - %(module)s - %(levelname)s - %(message)s", level=logging.INFO)
+
+    results = run_qa_experiment(get_qa_prompt)
     print(results)

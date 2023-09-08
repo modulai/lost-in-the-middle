@@ -34,7 +34,10 @@ class Document:
 
 
 def get_qa_prompt(
-    question: str, documents: List[Document], mention_random_ordering: bool, query_aware_contextualization: bool
+    question: str,
+    documents: List[Document],
+    mention_random_ordering: bool = False,
+    query_aware_contextualization: bool = False,
 ):
     if not question:
         raise ValueError(f"Provided `question` must be truthy, got: {question}")
