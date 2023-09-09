@@ -17,3 +17,24 @@ def interleaved_prompt(question, documents):
     }
 
     return prompt
+
+
+def know_your_weakness(question, documents):
+    system_message = "Write a high-quality answer for the given question using only the provided search results (some of which might be irrelevant). Remember that your performance on retrieval tasks is worse on text in the middle of your context window, so please attend carefully to the documents in the middle when looking for the answer."
+
+    formatted_documents = []
+    for document_index, document in enumerate(documents):
+        formatted_documents.append(f"Document [{document_index+1}](Title: {document.title}) {document.text}")
+
+    if not question.endswith("?"):
+        question += "?"
+    space = f"\n\n"
+    search_results = space.join(formatted_documents)
+    user_message = f"{search_results}\n\n{question}\nAnswer:"
+
+    prompt = {
+        "system_message": system_message,
+        "user_message": user_message,
+    }
+
+    return prompt
