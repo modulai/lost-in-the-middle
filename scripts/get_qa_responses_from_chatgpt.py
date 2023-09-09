@@ -162,7 +162,8 @@ def evaluate_qa_responses(
         model_answer = model_answer.split("\n")[0].strip()
 
         example_metrics = {}
-        example_metrics[metric_name] = best_subspan_em(prediction=model_answer, ground_truths=gold_answers)
+        for metric, metric_name in METRICS:
+            example_metrics[metric_name] = metric(prediction=model_answer, ground_truths=gold_answers)
         return (example_metrics, example)
 
     all_examples = []
@@ -225,6 +226,8 @@ if __name__ == "__main__":
 
     fig, ax = plt.subplots()
     ax.plot(results.keys(), results.values(), marker="o")
+    ax.set_xticks(list(results))
+    ax.set_xticklabels([k + 1 for k in results.keys()])
     ax.set_xlabel("Position of Document with the Answer")
     ax.set_ylabel("Accuracy")
     ax.set_title("20 Total Retrieved Documents")
