@@ -53,6 +53,7 @@ def get_qa_responses(
 
     examples = []
     prompts = []
+    questions = []
     all_model_documents = []
 
     # Fetch all of the prompts
@@ -87,6 +88,7 @@ def get_qa_responses(
                     question,
                     documents,
                 )
+            questions.append(question)
 
             prompts.append(prompt)
             examples.append(deepcopy(input_example))
@@ -94,6 +96,7 @@ def get_qa_responses(
 
     # Get responses for all of the prompts
     responses = []
+    i = 0
     for inputs in tqdm(prompts[:N_INPUTS]):
         output = get_openai_chat_completion(
             model=model_name,
@@ -102,6 +105,7 @@ def get_qa_responses(
             top_p=top_p,
             **inputs,
         )
+        question = questions[i]
         if prompt_function == summarize_first:
             new_system_message = "Write a high-quality answer for the given question using only the provided text"
             new_user_message = f"{output}\n\nQuestion: {question}\nAnswer:"
@@ -114,6 +118,7 @@ def get_qa_responses(
                 user_message=new_user_message,
             )
 
+        i += 1
         responses.append(output)
 
     with xopen(output_path, "w") as f:
@@ -206,7 +211,7 @@ if __name__ == "__main__":
     # results = run_qa_experiment(interleaved_prompt)
     # results = run_qa_experiment(know_your_weakness)
     results = run_qa_experiment(summarize_first)
-    
+
     fig, ax = plt.subplots()
     ax.plot(results.keys(), results.values(), marker="o")
     ax.set_xticks(list(results))
@@ -225,7 +230,7 @@ if __name__ == "__main__":
         ]
     ).transpose()
     previous_results.columns = ["Original", "Interleaved", "Know your weakness"]
-    
+
     fig, ax = plt.subplots()
     previous_results.plot(ax=ax, marker="o")
     ax.set_xticks(list(results))
