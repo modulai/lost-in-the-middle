@@ -1,3 +1,6 @@
+from src.lost_in_the_middle.gpt import get_openai_chat_completion
+
+
 def interleaved_prompt(question, documents):
     system_message = "Write a high-quality answer for the given question using only the provided search results (some of which might be irrelevant). The question will be repeated before each listed search result for context."
 
@@ -35,6 +38,36 @@ def know_your_weakness(question, documents):
     prompt = {
         "system_message": system_message,
         "user_message": user_message,
+    }
+
+    return prompt
+
+
+def summarize_first(question, documents):
+    system_message = "Please succintctly summarize the content of this list of documents. Be sure to also include information related to the given question in your summary."
+
+    formatted_documents = []
+    for document_index, document in enumerate(documents):
+        formatted_documents.append(f"Document [{document_index+1}](Title: {document.title}) {document.text}")
+    if not question.endswith("?"):
+        question += "?"
+    space = f"\n\n"
+    search_results = space.join(formatted_documents)
+    user_message = f"{question}\n\n{search_results}"
+    output = get_openai_chat_completion(
+        model="gpt-3.5-turbo-0613",
+        max_tokens=100,
+        temperature=0.0,
+        top_p=1.0,
+        system_message=system_message,
+        user_message=user_message,
+    )
+
+    new_system_message = "Write a high-quality answer for the given question using only the provided text"
+    new_user_message = f"{output}\n\nQuestion: {question}\nAnswer:"
+    prompt = {
+        "system_message": new_system_message,
+        "user_message": new_user_message,
     }
 
     return prompt

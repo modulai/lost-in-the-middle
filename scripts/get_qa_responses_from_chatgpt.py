@@ -9,20 +9,17 @@ from copy import deepcopy
 import time
 
 import matplotlib.pyplot as plt
-import openai
-from dotenv import find_dotenv, load_dotenv
 from tqdm import tqdm
 from xopen import xopen
 
 from src.lost_in_the_middle.metrics import best_subspan_em
 from src.lost_in_the_middle.prompting import Document, get_closedbook_qa_prompt, get_qa_prompt
 
+from src.lost_in_the_middle.gpt import get_openai_chat_completion
 from src.lost_in_the_middle.prompts.prompt_functions import interleaved_prompt
 
 from src.lost_in_the_middle.metrics import best_subspan_em
 
-load_dotenv(find_dotenv())
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
 plt.style.use("ggplot")
 
@@ -120,32 +117,6 @@ def get_qa_responses(
             output_example["model_top_p"] = top_p
             output_example["model_use_random_ordering"] = use_random_ordering
             f.write(json.dumps(output_example) + "\n")
-
-
-def get_openai_chat_completion(
-    model: str, temperature: float, top_p: float, max_tokens: int, system_message: str, user_message: str
-) -> str:
-    def create_chat_completion():
-        return openai.ChatCompletion.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message},
-            ],
-            temperature=temperature,
-            top_p=top_p,
-            max_tokens=max_tokens,
-        )
-
-    try:
-        response = create_chat_completion()
-    except Exception as e:
-        print(f"Error: {e}")
-        print("Let's sleep for 40s")
-        time.sleep(40)
-        response = create_chat_completion()
-
-    return response["choices"][0]["message"]["content"]
 
 
 def evaluate_qa_responses(
