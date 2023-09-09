@@ -16,7 +16,7 @@ from src.lost_in_the_middle.metrics import best_subspan_em
 from src.lost_in_the_middle.prompting import Document, get_closedbook_qa_prompt, get_qa_prompt
 
 from src.lost_in_the_middle.gpt import get_openai_chat_completion
-from src.lost_in_the_middle.prompts.prompt_functions import interleaved_prompt
+from src.lost_in_the_middle.prompts.prompt_functions import interleaved_prompt, summarize_first
 
 from src.lost_in_the_middle.metrics import best_subspan_em
 
@@ -102,6 +102,17 @@ def get_qa_responses(
             top_p=top_p,
             **inputs,
         )
+        if prompt_function == summarize_first:
+            new_system_message = "Write a high-quality answer for the given question using only the provided text"
+            new_user_message = f"{output}\n\nQuestion: {question}\nAnswer:"
+            output = get_openai_chat_completion(
+                model=model_name,
+                max_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                system_message=new_system_message,
+                user_message=new_user_message,
+            )
 
         responses.append(output)
 
