@@ -55,8 +55,8 @@ def summarize_first(question, documents):
     search_results = space.join(formatted_documents)
     user_message = f"{question}\n\n{search_results}"
     prompt = {
-        "system_message": new_system_message,
-        "user_message": new_user_message,
+        "system_message": system_message,
+        "user_message": user_message,
     }
 
     return prompt

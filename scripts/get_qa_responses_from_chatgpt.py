@@ -203,9 +203,10 @@ if __name__ == "__main__":
     logging.basicConfig(format="%(asctime)s - %(module)s - %(levelname)s - %(message)s", level=logging.INFO)
 
     # results = run_qa_experiment(get_qa_prompt)
-    results = run_qa_experiment(interleaved_prompt)
-    print(results)
-
+    # results = run_qa_experiment(interleaved_prompt)
+    # results = run_qa_experiment(know_your_weakness)
+    results = run_qa_experiment(summarize_first)
+    
     fig, ax = plt.subplots()
     ax.plot(results.keys(), results.values(), marker="o")
     ax.set_xticks(list(results))
@@ -214,4 +215,23 @@ if __name__ == "__main__":
     ax.set_ylabel("Accuracy")
     ax.set_title("20 Total Retrieved Documents")
     fig.savefig("results.png")
+    plt.close()
+
+    previous_results = pd.DataFrame(
+        [
+            {0: 0.67, 4: 0.48, 9: 0.53, 14: 0.51, 19: 0.61},
+            {0: 0.81, 4: 0.55, 9: 0.48, 14: 0.51, 19: 0.56},
+            {0: 0.7, 4: 0.53, 9: 0.5, 14: 0.53, 19: 0.58},
+        ]
+    ).transpose()
+    previous_results.columns = ["Original", "Interleaved", "Know your weakness"]
+    
+    fig, ax = plt.subplots()
+    previous_results.plot(ax=ax, marker="o")
+    ax.set_xticks(list(results))
+    ax.set_xticklabels([k + 1 for k in results.keys()])
+    ax.set_xlabel("Position of Document with the Answer")
+    ax.set_ylabel("Accuracy")
+    ax.set_title("20 Total Retrieved Documents")
+    fig.savefig("previous_results.png")
     plt.close()
